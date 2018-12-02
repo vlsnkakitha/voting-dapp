@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+    <script>
+        $(document).ready(function () {
+
+            var ownerAddress = "";
+            var candidateNames;
+            var isVotingComplete = false;
+            $.get("/fetchContractParameters", function (data, err) {
+                console.log(data.owner + "----" + data.isVotingComplete);
+                ownerAddress = data.owner;
+                isVotingComplete = data.isVotingComplete;
+            });
+
+            $("#enterVotingRoom").click(function () {
+
+                $("#voterAddressHidden").val($("#voterAddress").val());
+                console.log("HIDDEN" + $("#voterAddressHidden").val())
+                showCandidatesForVoting(isVotingComplete);
+                $("#enterVotingRoom").prop('disabled',true);
+            });
+
+            $("#vote").click(function () {
+                var selectedCandidate = $("input[name='selectedCandidate']:checked").val();
+                var voterAddress = $("#voterAddress").val();
+                console.log(voterAddress);
+                if ($.trim(selectedCandidate).length > 0 && $.trim(voterAddress).length > 0) {
+                    var requestData =
+                        {
+                            selectedCandidateName: selectedCandidate,
+                            voterId: voterAddress
+                        }
+                    $.post("http://127.0.0.1:3000/vote", requestData, function (data, err) {
+                        console.log(data.txId);
+                        if (data.txId != null) {
+                            $("#voteSuccess").show();
+                            $("#voteSuccess").html("You have voted succesfully and this is your transaction id " + data.txId).delay(5000).hide(1);
+                            $("#errMsg").hide();
+                        }
+                    });
+
+                } else {
+                    $("#errMsg").html("select all required details ").show();
+                }
+            });
+
+            $("#endOfVoting").click(function () {
+                $.get("http://127.0.0.1:3000/completeVoting", function (data, status) {
+                    console.log("VOTING COMPLETE RESPONSE" + data);
+                    showResults();
+                });
+            });
+        });
+
+        function showCandidatesForVoting(isVotingComplete) {
+            $('#candidatesList').find('tbody').remove();
+            $.get("http://127.0.0.1:3000/candidates", function (data, status) {
+
+                console.log(data.candidates.length);
+                $('#candidatesList').append("<tbody></tbody>");
+                var candidatesTable = $('#candidatesList').find("tbody");
+                ownerAddress = data.ownerAddress;
+                candidateNames = data.candidates;
+                if (!isVotingComplete) {
+                    console.log("Voting is in progress. Going to show candidates list");
+                    $('#resultsRegion').hide();
+                    $('#candidatesRegion').show();
+                    $('#votingContainer').show();
+
+                    $.each(candidateNames, function (index, value) {
+                        //console.log("Data: " + value + "\nStatus: " + status);
+                        candidatesTable.append("<tr><td id=\"candidate" + index + "\"" + ">" + value + "</td><td><input type=\"radio\" value=\"" + value + "\"" + " name=\"selectedCandidate\"></input>");
+                        candidatesTable.append("</td></tr>")
+                    });
+
+                    console.log("HIDDEN VOTER ADDRESS" + hiddenAddress);
+                    console.log("OWNER ADDRESS" + ownerAddress);
+                    var hiddenAddress = $("#voterAddressHidden").val();
+                    if ($.trim(String(hiddenAddress).toLowerCase()) ===
+                        $.trim(String(ownerAddress).toLowerCase())) {
+                        console.log("transaction coming from owner ");
+                        $("#endElection").show();
+                    } else {
+                        console.log("transaction coming from normal voter ");
+                        $("#endElection").hide();
+                    }
+                } else {
+                    console.log("Voting has been completed going to show results");
+                    showResults();
+                }
+            });
+        }
+        function showResults() {
+            var resultsTable = $("#resultsTable");
+            resultsTable.find('tbody').remove();
+            var resultsTableBody = resultsTable.append("<tbody></tbody>");
+            $.each(candidateNames, function (index, value) {
+                $.get("http://127.0.0.1:3000/getResults?cname=" + value, function (data, status) {
+                    console.log(JSON.stringify(data));
+                    resultsTable.append("<tr><td>" + value + "</td><td>" + data.votesCount + "</td></tr>")
+                });
+            });
+            $('#candidatesRegion').hide();
+            $('#resultsRegion').show();
+            $('#votingContainer').hide();
+        }
+    </script>
+</head>
+
+<body>
+    <div id="enterVotingRoomRegion" class="container" align="center">
+        <input placeholder="Enter your address here to enter voting room" type="text" id="voterAddress" size="60" />
+        <button class="btn btn-primary" id="enterVotingRoom">Enter Voting Room</button>
+        <input type="hidden" value="" id="voterAddressHidden" />
+    </div>
+    <br/>
+
+    <div style="float: right;display:none" id="endElection">
+        <input id="endOfVoting" type="button" class="btn btn-success" value="End Voting"></input>
+    </div>
+    <div class="container">
+        <div id="errMsg" style="display:none"></div>
+        <div id="voteSuccess"></div>
+        <div class="container" id="candidatesRegion" style="display:none">
+            <table class="table table-striped" id="candidatesList">
+                <thead>
+                    <tr>
+                        <th>Candidate Name</th>
+                        <th>Choose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+        <div id="resultsRegion" style="display:none">
+            <div>Election has been completed</div>
+            <table id="resultsTable" class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Candidate Name</th>
+                        <th>Votes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+        <div id="votingContainer" style="display:none">
+            <input id="vote" type="button" class="btn btn-primary" value="Vote"></input>
+        </div>
+    </div>
+</body>
+
+</html>
